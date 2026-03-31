@@ -1,7 +1,5 @@
 # Inside Tengu: Claude Code Source Analysis
 
-By [Piyush Makhija](https://x.com/piyushmakhija_)
-
 Claude Code's full TypeScript source was accidentally exposed via source maps in an NPM package.
 
 <a href="https://x.com/Fried_rice/status/2038894956459290963">
