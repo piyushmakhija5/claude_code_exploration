@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inside Tengu — Claude Code Deep Dive</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0e14;--bg2:#111820;--bg3:#1a2230;--bg4:#222d3d;--text:#c5cdd9;--text2:#8b98a8;--accent:#6ee7b7;--orange:#f59e0b;--pink:#f472b6;--blue:#60a5fa;--purple:#a78bfa;--red:#f87171;--cyan:#22d3ee;--font:'SF Mono',SFMono-Regular,'Cascadia Code',Consolas,monospace}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.7;overflow-x:hidden;min-height:100vh}
+a{color:var(--accent);text-decoration:none}code{background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:.85em}strong{color:#fff}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+
+/* === HERO === */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;position:relative}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(110,231,183,.06) 0%,transparent 60%)}
+.hero h1{font-size:clamp(2rem,5.5vw,3.8rem);font-weight:700;color:#fff;line-height:1.1;margin-bottom:.8rem;opacity:0;animation:fu .7s .2s forwards}
+.hero h1 span{color:var(--accent)}
+.hero .sub{font-size:clamp(.8rem,1.6vw,1rem);color:var(--text2);max-width:600px;margin-bottom:2.5rem;opacity:0;animation:fu .7s .4s forwards}
+.hero-stats{display:flex;gap:1.5rem;flex-wrap:wrap;justify-content:center;margin-bottom:2.5rem;opacity:0;animation:fu .7s .6s forwards}
+.hero-stat .num{font-size:1.8rem;font-weight:700;color:#fff}.hero-stat .lbl{font-size:.65rem;color:var(--text2);text-transform:uppercase;letter-spacing:1px}
+#sv{color:var(--accent);display:inline-block;min-width:140px}
+@keyframes fu{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+/* === TOUR PICKER === */
+.tour-picker{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;opacity:0;animation:fu .7s .8s forwards}
+.tour-btn{background:var(--bg2);border:2px solid var(--bg4);border-radius:12px;padding:1.2rem 1.5rem;cursor:pointer;transition:all .3s;text-align:left;max-width:260px;flex:1;min-width:200px}
+.tour-btn:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 8px 25px rgba(110,231,183,.08)}
+.tour-btn .t-icon{font-size:1.5rem;margin-bottom:.4rem}
+.tour-btn .t-name{color:#fff;font-weight:700;font-size:.95rem;margin-bottom:.3rem}
+.tour-btn .t-desc{color:var(--text2);font-size:.72rem;line-height:1.5}
+.tour-btn .t-stops{color:var(--accent);font-size:.68rem;margin-top:.5rem}
+
+/* === TOUR VIEW === */
+#tour-view{display:none;min-height:100vh}
+.tour-header{position:sticky;top:0;z-index:100;background:rgba(10,14,20,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--bg3);padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:.8rem}
+.tour-header .tour-title{font-size:.8rem;color:var(--accent);font-weight:600;white-space:nowrap}
+.tour-dots{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;flex:1}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--bg4);cursor:pointer;transition:all .2s;border:none;padding:0}
+.dot:hover{background:var(--text2)}.dot.active{background:var(--accent);box-shadow:0 0 6px rgba(110,231,183,.4)}.dot.visited{background:var(--bg4);border:2px solid var(--accent)}
+.tour-header .back-btn{font-size:.75rem;color:var(--text2);cursor:pointer;background:none;border:1px solid var(--bg4);border-radius:6px;padding:4px 12px;font-family:var(--font);transition:all .2s;white-space:nowrap}
+.tour-header .back-btn:hover{border-color:var(--accent);color:var(--accent)}
+.tour-progress{height:3px;background:var(--bg3);position:sticky;top:42px;z-index:99}.tour-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--cyan));transition:width .4s}
+
+/* === STOP === */
+.stop{max-width:900px;margin:0 auto;padding:2.5rem 1.5rem;min-height:calc(100vh - 80px);animation:stopIn .4s ease}
+@keyframes stopIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.stop-num{font-size:.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:.4rem}
+.stop h2{font-size:1.5rem;color:#fff;margin-bottom:.5rem}
+.stop .stop-sub{color:var(--text2);font-size:.88rem;margin-bottom:1.5rem;line-height:1.6}
+
+/* === NAV BUTTONS === */
+.stop-nav{display:flex;justify-content:space-between;align-items:center;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--bg3)}
+.nav-btn{padding:10px 24px;border-radius:8px;font-size:.82rem;cursor:pointer;font-family:var(--font);transition:all .2s;border:none}
+.nav-btn.next{background:var(--accent);color:var(--bg);font-weight:600}.nav-btn.next:hover{box-shadow:0 4px 15px rgba(110,231,183,.3);transform:translateY(-1px)}
+.nav-btn.prev{background:var(--bg3);color:var(--text)}.nav-btn.prev:hover{background:var(--bg4)}
+.nav-btn:disabled{opacity:.3;cursor:default;transform:none;box-shadow:none}
+.stop-counter{font-size:.75rem;color:var(--text2)}
+
+/* === TAKEAWAY BOX === */
+.takeaway{background:linear-gradient(135deg,rgba(110,231,183,.1),rgba(34,211,238,.06));border:1px solid rgba(110,231,183,.35);border-radius:10px;padding:1.2rem 1.4rem;margin-top:1.8rem;position:relative;box-shadow:0 0 20px rgba(110,231,183,.06)}
+.takeaway::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:10px 0 0 10px}
+.takeaway .ta-label{font-size:.7rem;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:.4rem;font-weight:700}
+.takeaway p{font-size:.88rem;color:#e2e8f0;line-height:1.7;font-weight:500}
+
+/* === REUSABLE COMPONENTS === */
+.card{background:var(--bg2);border:1px solid var(--bg3);border-radius:10px;padding:1.1rem;transition:all .3s}
+.card:hover{border-color:var(--accent);transform:translateY(-1px)}.card h3{color:#fff;font-size:.95rem;margin-bottom:.3rem}.card p{color:var(--text2);font-size:.8rem}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.8rem}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.7rem}
+.grid-4{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.5rem}
+.stat-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:10px;padding:1rem;text-align:center}
+.stat-card .sn{font-size:1.6rem;font-weight:700}.stat-card .sl{font-size:.68rem;color:var(--text2);margin-top:2px}
+.flow{display:flex;flex-direction:column;align-items:center;gap:0;margin:1.2rem 0}.flow-node{background:var(--bg3);border:1px solid var(--bg4);border-radius:8px;padding:9px 16px;font-size:.8rem;text-align:center;max-width:360px;width:100%;transition:all .2s}.flow-node:hover{border-color:var(--accent)}.flow-node.hl{border-color:var(--accent);box-shadow:0 0 12px rgba(110,231,183,.08)}.flow-arrow{color:var(--accent);font-size:1rem;padding:2px 0}.flow-branch{display:flex;gap:.6rem;width:100%;max-width:420px}.flow-branch .flow-node{flex:1;font-size:.75rem}
+.layer{padding:.5rem .8rem;border-radius:6px;font-size:.78rem;display:flex;align-items:center;gap:.5rem;margin-bottom:3px;transition:all .2s}.layer:hover{transform:translateX(3px)}
+.tier{padding:.7rem 1rem;border-radius:8px;display:flex;justify-content:space-between;align-items:center;font-size:.8rem;margin-bottom:3px}
+.data-table{width:100%;border-collapse:collapse;font-size:.76rem;margin:.8rem 0}.data-table th{text-align:left;padding:7px 9px;border-bottom:2px solid var(--bg4);color:var(--accent);font-size:.68rem;text-transform:uppercase;letter-spacing:1px}.data-table td{padding:7px 9px;border-bottom:1px solid var(--bg3)}.data-table tr:hover td{background:var(--bg2)}
+.flag-pill{display:inline-block;padding:3px 8px;border-radius:4px;font-size:.66rem;margin:2px;transition:all .2s}.flag-pill:hover{transform:scale(1.05)}
+.flag-pill.shipped{background:rgba(110,231,183,.1);color:var(--accent)}.flag-pill.emerging{background:rgba(96,165,250,.1);color:var(--blue)}.flag-pill.future{background:rgba(167,139,250,.1);color:var(--purple)}.flag-pill.safety{background:rgba(248,113,113,.1);color:var(--red)}.flag-pill.unknown{background:rgba(245,158,11,.1);color:var(--orange)}
+.cheat-row{display:flex;gap:.5rem;align-items:center;padding:7px 10px;background:var(--bg2);border-radius:6px;margin-bottom:3px;font-size:.78rem}.cheat-key{background:var(--bg);padding:3px 8px;border-radius:4px;font-weight:600;color:var(--accent);white-space:nowrap;min-width:130px;font-size:.72rem}.cheat-desc{color:var(--text2);font-size:.75rem}
+.buddy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:.5rem}.buddy-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:8px;padding:.6rem;text-align:center;cursor:pointer;transition:all .3s}.buddy-card:hover{border-color:var(--pink);transform:translateY(-2px)}.buddy-card .sp{font-size:1.3rem}.buddy-card .nm{font-size:.72rem;color:#fff;font-weight:600}.buddy-card .rr{font-size:.58rem;text-transform:uppercase;letter-spacing:.5px}
+.cmp-row{display:grid;grid-template-columns:1fr 60px 60px;gap:4px;padding:5px 9px;font-size:.72rem;border-radius:3px}.cmp-row:nth-child(odd){background:var(--bg2)}.cmp-row .topic{color:#fff}.cmp-yes{color:var(--accent);text-align:center;font-weight:600}.cmp-no{color:var(--text2);text-align:center}
+.principle-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:10px;padding:1rem;position:relative;overflow:hidden}.principle-card .pn{position:absolute;top:-6px;right:6px;font-size:2.5rem;font-weight:900;color:var(--bg3)}.principle-card h3{font-size:.85rem;color:var(--accent);margin-bottom:.3rem;position:relative}.principle-card p{font-size:.75rem;color:var(--text2);position:relative}
+/* === Source refs === */
+.ref{border-bottom:1px dotted var(--text2);cursor:help;position:relative;white-space:nowrap}.ref:hover{border-color:var(--accent);color:var(--accent)}
+.ref .ref-tip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--bg);border:1px solid var(--accent);border-radius:6px;padding:5px 10px;font-size:.68rem;color:var(--accent);white-space:nowrap;z-index:50;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.ref .ref-tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--accent)}
+.ref:hover .ref-tip,.ref:focus .ref-tip{display:block}
+@media(max-width:640px){.ref .ref-tip{left:0;transform:none;max-width:250px;white-space:normal}}
+/* === Expandable tool cards === */
+.tool-x{background:var(--bg2);border:1px solid var(--bg3);border-radius:8px;cursor:pointer;transition:all .3s;overflow:hidden}
+.tool-x:hover{border-color:var(--accent)}.tool-x.open{border-color:var(--accent)}
+.tool-x .tx-head{padding:.6rem .8rem;display:flex;justify-content:space-between;align-items:center}
+.tool-x .tx-head .tool-name{font-weight:600;color:#fff;font-size:.82rem}.tool-x .tx-head .tool-cat{font-size:.6rem;color:var(--accent);text-transform:uppercase;letter-spacing:1px}
+.tool-x .tx-head .tx-arrow{color:var(--text2);font-size:.7rem;transition:transform .2s}.tool-x.open .tx-arrow{transform:rotate(90deg);color:var(--accent)}
+.tool-x .tx-body{max-height:0;overflow:hidden;transition:max-height .3s ease}.tool-x.open .tx-body{max-height:300px}
+.tool-x .tx-inner{padding:0 .8rem .7rem;font-size:.72rem;color:var(--text2);border-top:1px solid var(--bg3);padding-top:.5rem;line-height:1.6}
+/* === Skill pills === */
+.skill-pill{display:inline-block;padding:4px 10px;border-radius:6px;font-size:.72rem;margin:2px;border:1px solid var(--bg4);color:var(--text);transition:all .2s;cursor:default}
+.skill-pill:hover{border-color:var(--accent);color:var(--accent)}.skill-pill .sk-gate{font-size:.58rem;color:var(--text2);margin-left:4px}
+/* === Token blocks (waffle chart) === */
+.token-waffle{display:flex;flex-wrap:wrap;gap:2px;margin:.8rem 0}.token-block{width:14px;height:14px;border-radius:2px;transition:all .2s;cursor:pointer;position:relative}.token-block:hover{transform:scale(1.6);z-index:5;border-radius:3px}
+.token-legend{display:flex;flex-wrap:wrap;gap:.6rem;margin:.6rem 0;font-size:.7rem}.token-legend-item{display:flex;align-items:center;gap:4px}.token-legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.token-bar{display:flex;height:28px;border-radius:6px;overflow:hidden;margin:.5rem 0}.token-bar-seg{display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:600;color:var(--bg);white-space:nowrap;overflow:hidden;transition:all .3s;cursor:pointer;position:relative}.token-bar-seg:hover{filter:brightness(1.2)}
+.token-bar-seg .tbs-tip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--bg);border:1px solid var(--accent);border-radius:6px;padding:4px 8px;font-size:.65rem;color:var(--text);white-space:nowrap;z-index:10;pointer-events:none}.token-bar-seg:hover .tbs-tip{display:block}
+/* === Horizontal bar chart for token viz === */
+.hbar-chart{display:flex;flex-direction:column;gap:4px;margin:.8rem 0}
+.hbar-row{display:flex;align-items:center;gap:8px;font-size:.75rem}
+.hbar-label{min-width:100px;text-align:right;color:var(--text2);font-size:.7rem;white-space:nowrap}
+.hbar-track{flex:1;height:22px;background:var(--bg3);border-radius:4px;overflow:hidden;position:relative}
+.hbar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:.65rem;font-weight:600;color:var(--bg);white-space:nowrap;transition:width .5s ease}
+.hbar-val{min-width:55px;font-size:.68rem;color:var(--text2);text-align:right}
+@media(max-width:640px){.grid-2{grid-template-columns:1fr}.flow-branch{flex-direction:column;align-items:center}.tour-picker{flex-direction:column;align-items:center}.tour-btn{max-width:100%}.stop{padding:1.5rem 1rem}.cmp-row{grid-template-columns:1fr 50px 50px}.hbar-label{min-width:70px;font-size:.62rem}}
+</style>
+</head>
+<body>
+
+<!-- ===== HERO ===== -->
+<div class="hero" id="hero">
+  <h1>Inside <span>Claude Code</span></h1>
+  <p class="sub">Anthropic's AI coding agent exposed its source code. We analyzed 4,683 lines of <code>main.tsx</code>, 40+ tools, 90+ feature flags, and a hidden gacha game. Pick a tour.</p>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="num" data-c="4683">0</div><div class="lbl">Lines main.tsx</div></div>
+    <div class="hero-stat"><div class="num" data-c="40">0</div><div class="lbl">Tools</div></div>
+    <div class="hero-stat"><div class="num" data-c="90">0</div><div class="lbl">Feature Flags</div></div>
+    <div class="hero-stat"><div class="num" data-c="18">0</div><div class="lbl">Buddy Species</div></div>
+  </div>
+  <p style="font-size:.8rem;color:var(--text2);margin-bottom:2rem">Currently <span id="sv">Clauding</span>...</p>
+
+  <div class="tour-picker">
+    <div class="tour-btn" onclick="startTour(0)">
+      <div class="t-icon">&#x1F3D7;</div>
+      <div class="t-name">The Architecture</div>
+      <div class="t-desc">How it works. The loop, tools, skills, agents, system prompt, context, cache, memory, and models.</div>
+      <div class="t-stops">12 stops &middot; ~10 min</div>
+    </div>
+    <div class="tour-btn" onclick="startTour(1)">
+      <div class="t-icon">&#x1F50D;</div>
+      <div class="t-name">The Secrets</div>
+      <div class="t-desc">What's hidden. Anti-distillation, undercover mode, internal prompts, codenames, a gacha game, and dreams.</div>
+      <div class="t-stops">8 stops &middot; ~6 min</div>
+    </div>
+    <div class="tour-btn" onclick="startTour(2)">
+      <div class="t-icon">&#x1F527;</div>
+      <div class="t-name">The Playbook</div>
+      <div class="t-desc">What to do with this. 10 principles for agent builders, power user tricks, and what HN missed.</div>
+      <div class="t-stops">7 stops &middot; ~5 min</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TOUR VIEW ===== -->
+<div id="tour-view">
+  <div class="tour-header">
+    <button class="back-btn" onclick="exitTour()">&larr; Tours</button>
+    <span class="tour-title" id="tour-title"></span>
+    <div class="tour-dots" id="tour-dots"></div>
+  </div>
+  <div class="tour-progress"><div class="tour-progress-fill" id="tour-progress"></div></div>
+  <div id="stop-container"></div>
+</div>
+
+<script>
+// ===== SPINNER =====
+const V=["Clauding","Beboppin'","Boondoggling","Canoodling","Cerebrating","Combobulating","Dilly-dallying","Flamb\u00e9ing","Flibbertigibbeting","Gallivanting","Hullaballooing","Jitterbugging","Julienning","Lollygagging","Meandering","Metamorphosing"];
+let vi=0;setInterval(()=>{vi=(vi+1)%V.length;const e=document.getElementById('sv');if(e)e.textContent=V[vi]},2e3);
+
+// ===== COUNTERS =====
+setTimeout(()=>{document.querySelectorAll('[data-c]').forEach(el=>{const t=+el.dataset.c,s=performance.now();(function f(n){const p=Math.min((n-s)/1200,1);el.textContent=Math.round((1-Math.pow(1-p,3))*t).toLocaleString();p<1&&requestAnimationFrame(f)})(s)})},300);
+
+// ===== BUDDY HTML GENERATOR =====
+const SP=[{n:'Duck',e:'\uD83E\uDD86'},{n:'Goose',e:'\uD83E\uDEB6'},{n:'Blob',e:'\uD83E\uDEE0'},{n:'Cat',e:'\uD83D\uDC31'},{n:'Dragon',e:'\uD83D\uDC09'},{n:'Octopus',e:'\uD83D\uDC19'},{n:'Owl',e:'\uD83E\uDD89'},{n:'Penguin',e:'\uD83D\uDC27'},{n:'Turtle',e:'\uD83D\uDC22'},{n:'Snail',e:'\uD83D\uDC0C'},{n:'Ghost',e:'\uD83D\uDC7B'},{n:'Axolotl',e:'\uD83E\uDD8E'},{n:'Capybara',e:'\uD83E\uDDAB'},{n:'Cactus',e:'\uD83C\uDF35'},{n:'Robot',e:'\uD83E\uDD16'},{n:'Rabbit',e:'\uD83D\uDC30'},{n:'Mushroom',e:'\uD83C\uDF44'},{n:'Chonk',e:'\uD83D\uDC3B'}];
+const RAR=['common','uncommon','rare','epic','legendary'],RW=[60,25,10,4,1];
+function buddyHTML(){return SP.map((s,i)=>{const r=RW.reduce((a,w,j)=>{if(a.found)return a;a.acc+=w;if((i*37+17)%100<a.acc)return{...a,found:true,r:RAR[j]};return a},{acc:0,found:false,r:'common'}).r;return`<div class="buddy-card"><div class="sp">${s.e}</div><div class="nm">${s.n}</div><div class="rr rarity-${r}">${r} ${'★'.repeat(RAR.indexOf(r)+1)}</div></div>`}).join('')}
+
+// ===== SOURCE REF HELPER =====
+const R=(text,file)=>`<span class="ref" tabindex="0">${text}<span class="ref-tip">\u{1F4C2} ${file}</span></span>`;
+
+// ===== TOUR DATA =====
+const tours=[
+// ===== TOUR 0: ARCHITECTURE =====
+{name:'The Architecture',icon:'\u{1F3D7}',stops:[
+// --- Stop 1: THE LOOP ---
+{title:'It\u2019s Just a While Loop',sub:`The entire agent lives in ${R('query.ts','query.ts \u2014 68,683 bytes')} (68KB). No framework. No orchestration layer. Just a <code>while(true)</code> around an API call.`,html:`<div class="flow"><div class="flow-node hl">You type a message</div><div class="flow-arrow">\u2193</div><div class="flow-node">${R('Parse input','utils/processUserInput/processUserInput.ts')}, slash commands, images, hooks</div><div class="flow-arrow">\u2193</div><div class="flow-node hl">${R('Send to Claude API','services/api/claude.ts')} (streaming)</div><div class="flow-arrow">\u2193</div><div class="flow-branch"><div class="flow-node" style="border-color:var(--accent)">Text only?<br><small style="color:var(--accent)">Done</small></div><div class="flow-node" style="border-color:var(--orange)">Tool calls?<br><small style="color:var(--orange)">${R('Execute','services/tools/toolOrchestration.ts')} & loop</small></div></div></div><div class="grid-2"><div class="card"><h3>${R('54 yield points','query.ts \u2014 54 yield sites in queryLoop()')}</h3><p>Streaming to your terminal in real-time before the API response is complete.</p></div><div class="card"><h3>No framework</h3><p>No LangChain, LlamaIndex. The loop is direct TypeScript in ${R('query.ts','query.ts')} + ${R('QueryEngine.ts','QueryEngine.ts \u2014 46,630 bytes')}.</p></div></div>`,takeaway:'The loop should be dumb; the prompt should be smart. If your agent framework has more logic than your prompts, reconsider.'},
+// --- Stop 5: SYSTEM PROMPT (REPLACED WITH TOKEN VISUALIZATION) ---
+{title:'System Prompt: ~46,000 Tokens of Instructions',sub:`The system prompt is massive \u2014 ${R('~46K tokens','constants/prompts.ts \u2014 ~700 lines')} split by <code>__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__</code>. Tool schemas dominate. Here\u2019s how the token budget breaks down.`,html:`
+<h3 style="color:var(--accent);margin-bottom:.5rem">Token Distribution (proportional)</h3>
+<p style="font-size:.78rem;color:var(--text2);margin-bottom:.6rem">~46K total tokens. Tool schemas consume the vast majority, dwarfing all behavioral instructions combined.</p>
+<div class="token-bar" style="height:34px;border-radius:8px">
+<div class="token-bar-seg" style="width:72%;background:var(--accent)" title="Tool Schemas ~33,000t">
+<span class="tbs-tip">Tool Schemas ~33,000t (72%)</span>Tools 72%
+</div>
+<div class="token-bar-seg" style="width:2.8%;background:var(--blue)" title="Doing Tasks ~1,300t">
+<span class="tbs-tip">Doing Tasks ~1,300t</span>
+</div>
+<div class="token-bar-seg" style="width:1.7%;background:var(--orange)" title="Actions ~800t">
+<span class="tbs-tip">Actions ~800t</span>
+</div>
+<div class="token-bar-seg" style="width:1.1%;background:var(--pink)" title="Identity ~500t">
+<span class="tbs-tip">Identity ~500t</span>
+</div>
+<div class="token-bar-seg" style="width:1.1%;background:var(--purple)" title="Using Tools ~500t">
+<span class="tbs-tip">Using Tools ~500t</span>
+</div>
+<div class="token-bar-seg" style="width:1.5%;background:var(--cyan)" title="Env+Memory ~700t">
+<span class="tbs-tip">Env+Memory ~700t</span>
+</div>
+<div class="token-bar-seg" style="width:.87%;background:#8b98a8" title="Session ~400t">
+<span class="tbs-tip">Session ~400t</span>
+</div>
+<div class="token-bar-seg" style="width:.76%;background:#e2e8f0" title="Tone ~350t">
+<span class="tbs-tip">Tone ~350t</span>
+</div>
+<div class="token-bar-seg" style="width:.43%;background:var(--red)" title="Cyber Risk ~200t">
+<span class="tbs-tip">Cyber Risk ~200t</span>
+</div>
+</div>
+<div class="token-legend" style="margin-bottom:1rem">
+<div class="token-legend-item"><div class="token-legend-dot" style="background:var(--accent)"></div>Tool Schemas ~33,000t</div>
+<div class="token-legend-item"><div class="token-legend-dot" style="background:var(--blue)"></div>Doing Tasks ~1,300t</div>
+<div class="token-legend-item"><div class="token-legend-dot" style="background:var(--orange)"></div>Actions ~800t</div>
+<div class="token-legend-item"><div class="token-legend-dot" style="background:var(--pink)"></div>Identity ~500t</div>
+<div class="token-legend-item"><div class="token-legend-dot" style="background:var(--purple)"></div>Using Tools ~500t</div>
+<div class="token-legend-item"><div class="token-legend-dot" style="background:var(--cyan)"></div>Env+Memory ~700t</div>
+<div class="token-legend-item"><div class="token-legend-dot" style="background:#8b98a8"></div>Session ~400t</div>
+<div class="token-legend-item"><div class="token-legend-dot" style="background:#e2e8f0"></div>Tone ~350t</div>
+<div class="token-legend-item"><div class="token-legend-dot" style="background:var(--red)"></div>Cyber Risk ~200t</div>
+</div>
+
+<h3 style="color:var(--orange);margin-bottom:.5rem">Top 10 Tool Prompts by Size</h3>
+<p style="font-size:.78rem;color:var(--text2);margin-bottom:.6rem">Tool prompt sizes vary wildly. ${R('Bash','tools/BashTool/prompt.ts')} alone is larger than all non-tool prompt sections combined.</p>
+<div class="hbar-chart">
+${[
+{n:'Bash',t:5282,c:'var(--accent)'},
+{n:'Agent',t:4167,c:'var(--blue)'},
+{n:'PowerShell',t:2456,c:'var(--purple)'},
+{n:'TodoWrite',t:2381,c:'var(--orange)'},
+{n:'Skill',t:2055,c:'var(--pink)'},
+{n:'PlanMode',t:1938,c:'var(--cyan)'},
+{n:'Cron',t:1879,c:'#8b98a8'},
+{n:'TeamCreate',t:1725,c:'#e2e8f0'},
+{n:'ToolSearch',t:1306,c:'var(--accent)'},
+{n:'AskUser',t:725,c:'var(--blue)'},
+].map(b=>{const pct=Math.round(b.t/5282*100);return '<div class="hbar-row"><span class="hbar-label">'+b.n+'</span><div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%;background:'+b.c+'">'+( pct>20? b.t+'t':'' )+'</div></div><span class="hbar-val">'+b.t.toLocaleString()+' t</span></div>'}).join('')}
+</div>
+
+<h3 style="color:var(--cyan);margin:.8rem 0 .5rem">Static / Dynamic Boundary</h3>
+<div style="display:flex;flex-direction:column;gap:3px">
+<div class="layer" style="background:rgba(110,231,183,.06);border-left:3px solid var(--accent)">\u{1F512} <strong>STATIC</strong> <span style="color:var(--accent);font-size:.72rem">(cross-org cacheable)</span></div>
+<div class="layer" style="background:var(--bg2);margin-left:1rem">Identity + Cyber Risk + Doing Tasks + Actions + Tools + Style</div>
+<div class="layer" style="background:rgba(245,158,11,.08);border-left:3px solid var(--orange);margin-top:4px">\u26A1 <strong>__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__</strong></div>
+<div class="layer" style="background:rgba(96,165,250,.06);border-left:3px solid var(--blue);margin-top:4px">\u{1F504} <strong>DYNAMIC</strong> <span style="color:var(--blue);font-size:.72rem">(your cwd, git, memory, MCP)</span></div>
+</div>
+<p style="margin-top:1rem;font-size:.8rem;color:var(--text2)">${R('<code>DANGEROUS_uncachedSystemPromptSection</code>','constants/systemPromptSections.ts')} \u2014 recomputes every turn. <strong>Requires a reason string</strong> justifying why cache-breaking is necessary. Boundary defined in ${R('constants/prompts.ts','constants/prompts.ts \u2014 ~700 lines')}.</p>`,takeaway:'72% of the system prompt is tool schemas. Bash alone (5,282t) is bigger than all behavioral instructions combined. This is why ToolSearch and deferred loading exist \u2014 and why cache optimization is existential.'},
+// --- Stop 2: 40+ TOOLS ---
+{title:'40+ Tools, Each With a Behavioral Contract',sub:'Tools aren\u2019t just described \u2014 their prompts encode rules, anti-patterns, cross-references, and failure modes. <strong>Click any tool to see its key rules.</strong>',html:`<div class="grid-3">${[
+{n:'Read',c:'File',d:'Max 2,000 lines. Returns FILE_UNCHANGED_STUB on re-read (saves tokens). Supports images, PDFs (max 20 pages), Jupyter notebooks.',f:'tools/FileReadTool/prompt.ts'},
+{n:'Edit',c:'File',d:'<strong>Refuses without prior Read.</strong> Fails if old_string not unique. Detects concurrent modification. Ant: "use smallest old_string, 2-4 lines."',f:'tools/FileEditTool/prompt.ts'},
+{n:'Write',c:'File',d:'"NEVER create documentation files (*.md) unless explicitly requested." Prefers Edit for existing files \u2014 "it only sends the diff."',f:'tools/FileWriteTool/prompt.ts'},
+{n:'Bash',c:'Shell',d:'<strong>~250 lines of prompt.</strong> Git safety protocol, sandbox config, undercover mode. dangerouslyDisableSandbox \u2014 name intentionally alarming.',f:'tools/BashTool/prompt.ts'},
+{n:'Grep',c:'Search',d:'"ALWAYS use Grep. <strong>NEVER invoke grep or rg as a Bash command.</strong>" Built on bundled ripgrep. Optimized for permissions.',f:'tools/GrepTool/prompt.ts'},
+{n:'Glob',c:'Search',d:'Fast file pattern matching. "When doing an open-ended search, use the Agent tool instead." Sorted by modification time.',f:'tools/GlobTool/prompt.ts'},
+{n:'Agent',c:'Agent',d:'Spawns subagents. 6 built-in types (see Agents stop). Dynamic agent list moved to attachments \u2014 was 10.2% of cache costs.',f:'tools/AgentTool/AgentTool.tsx'},
+{n:'WebSearch',c:'Web',d:'Web search via API. Results may be summarized for large pages.',f:'tools/WebSearchTool/'},
+{n:'WebFetch',c:'Web',d:'Fetches URL content, converts HTML to markdown, processes with small model. 15-min self-cleaning cache.',f:'tools/WebFetchTool/'},
+{n:'AskUser',c:'UX',d:'Multiple choice questions with optional preview panes. Supports markdown and HTML previews. multiSelect mode.',f:'tools/AskUserQuestionTool/prompt.ts'},
+{n:'ToolSearch',c:'Meta',d:'Fetches schemas for <strong>deferred tools</strong> \u2014 not all 40+ sent upfront. Model must call this before using deferred tools. Saves tokens.',f:'tools/ToolSearchTool/'},
+{n:'PlanMode',c:'Plan',d:'"Use proactively for non-trivial tasks." Transitions to read-only exploration. 7 when-to-use conditions. ExitPlanMode for approval.',f:'tools/EnterPlanModeTool/prompt.ts'},
+{n:'Tasks',c:'Tasks',d:'6 tools: Create, Update, Get, List, Output, Stop. Background task management with status tracking and progress.',f:'tools/TaskCreateTool/'},
+{n:'MCPTool',c:'MCP',d:'Invokes tools from connected MCP servers. Auth, resource access, elicitation. Full MCP client with 23+ files.',f:'services/mcp/client.ts'},
+{n:'Notebook',c:'File',d:'Jupyter notebook editing. Returns all cells with outputs, combining code, text, and visualizations.',f:'tools/NotebookEditTool/'},
+{n:'SendMsg',c:'Agent',d:'Inter-agent communication. Used in coordinator mode and swarm patterns for TeamCreate/TeamDelete workflows.',f:'tools/SendMessageTool/'},
+{n:'Cron',c:'Sched',d:'Schedule recurring agents. Create, delete, list cron jobs. Remote trigger support.',f:'tools/ScheduleCronTool/'},
+{n:'Sleep',c:'Util',d:'Wait/polling tool. Affects command queue drain priority ("later" vs "next").',f:'tools/SleepTool/'},
+].map(t=>`<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">${t.c}</div><div class="tool-name">${t.n}</div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">${t.d}<br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} ${t.f}</span></div></div></div>`).join('')}</div>`,takeaway:'Tool prompts are your best lever. Write them like you\u2019re training a new hire \u2014 encode what NOT to do, how tools relate, and what failure looks like.'},
+// --- Stop 3: SKILLS & AGENT DEFINITIONS ---
+{title:'Skills & Agent Definitions',sub:`The slash command system (${R('skills/','skills/bundled/index.ts')}) and the actual system prompts for each built-in agent (${R('tools/AgentTool/built-in/','tools/AgentTool/built-in/')}).`,html:`<h3 style="color:var(--accent);margin-bottom:.6rem">Bundled Skills (slash commands)</h3><p style="font-size:.8rem;color:var(--text2);margin-bottom:.6rem">Skills are slash commands that expand into full prompts. Defined in <code>skills/bundled/</code> and user-loadable from <code>~/.claude/skills/</code>. <strong>Click any skill to see what it does.</strong></p>
+<h4 style="color:var(--cyan);font-size:.75rem;margin:.8rem 0 .4rem;text-transform:uppercase;letter-spacing:1px">Core Skills</h4>
+<div class="grid-3">${[
+{n:'/commit',c:'Core',d:'Analyzes staged changes and creates a well-formatted git commit with appropriate message following repo conventions.'},
+{n:'/review',c:'Core',d:'Reviews changed code for bugs, security issues, and style problems. Produces structured feedback with severity levels.'},
+{n:'/simplify',c:'Core',d:'Reviews changed code for reuse, quality, and efficiency, then fixes any issues found automatically.'},
+{n:'/verify',c:'Core',d:'Runs tests and checks to verify the current code changes work correctly before committing.'},
+{n:'/debug',c:'Core',d:'Investigates failing tests or errors by reading logs, tracing execution, and suggesting fixes.'},
+{n:'/stuck',c:'Core',d:'Helps when you are blocked. Suggests alternative approaches, reads error context, and offers recovery strategies.'},
+].map(s=>`<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">${s.c}</div><div class="tool-name">${s.n}</div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">${s.d}<br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} skills/bundled/</span></div></div></div>`).join('')}</div>
+<h4 style="color:var(--pink);font-size:.75rem;margin:.8rem 0 .4rem;text-transform:uppercase;letter-spacing:1px">Memory Skills</h4>
+<div class="grid-3">${[
+{n:'/remember',c:'Memory',d:'Saves important context to persistent memory (MEMORY.md). Useful for project conventions, preferences, and key decisions.'},
+{n:'/dream',c:'Memory',d:'Triggers dream consolidation \u2014 a reflective pass over memory files that synthesizes and prunes stale facts. Gated: KAIROS.'},
+].map(s=>`<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">${s.c}</div><div class="tool-name">${s.n}${s.n==='/dream'?'<span class="sk-gate" style="font-size:.58rem;color:var(--text2);margin-left:4px">\u{1F6A9} KAIROS</span>':''}</div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">${s.d}<br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} skills/bundled/</span></div></div></div>`).join('')}</div>
+<h4 style="color:var(--purple);font-size:.75rem;margin:.8rem 0 .4rem;text-transform:uppercase;letter-spacing:1px">Meta Skills</h4>
+<div class="grid-3">${[
+{n:'/skillify',c:'Meta',d:'Creates a new reusable skill from a description. Writes the skill file to ~/.claude/skills/ for future use.'},
+{n:'/update-config',c:'Meta',d:'Configures Claude Code settings via settings.json. Sets up hooks, permissions, and automated behaviors.'},
+{n:'/keybindings',c:'Meta',d:'Customizes keyboard shortcuts. Edits ~/.claude/keybindings.json for rebinding keys and adding chord shortcuts.'},
+{n:'/batch',c:'Meta',d:'Runs a prompt or slash command across multiple files or targets in batch. Useful for bulk operations.'},
+].map(s=>`<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">${s.c}</div><div class="tool-name">${s.n}</div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">${s.d}<br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} skills/bundled/</span></div></div></div>`).join('')}</div>
+<h4 style="color:var(--orange);font-size:.75rem;margin:.8rem 0 .4rem;text-transform:uppercase;letter-spacing:1px">Feature-Gated Skills</h4>
+<div class="grid-3">${[
+{n:'/loop',c:'Gated',g:'AGENT_TRIGGERS',d:'Runs a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Defaults to 10-minute interval.'},
+{n:'/schedule',c:'Gated',g:'AGENT_TRIGGERS_REMOTE',d:'Creates, updates, lists, or runs scheduled remote agents (triggers) that execute on a cron schedule.'},
+{n:'/claude-api',c:'Gated',g:'BUILDING_CLAUDE_APPS',d:'Helps build apps with the Claude API or Anthropic SDK. Triggers when code imports anthropic or SDK packages.'},
+{n:'/hunter',c:'Gated',g:'REVIEW_ARTIFACT',d:'Review artifact hunter. Finds and catalogs review artifacts in the codebase for analysis.'},
+].map(s=>`<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">${s.c}</div><div class="tool-name">${s.n}<span class="sk-gate" style="font-size:.58rem;color:var(--text2);margin-left:4px">\u{1F6A9} ${s.g}</span></div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">${s.d}<br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} skills/bundled/</span></div></div></div>`).join('')}</div>`,takeaway:'Skills are the extension API \u2014 user-creatable via ~/.claude/skills/ with YAML frontmatter. Each skill can restrict tools, override models, and inject context.'},
+// --- Stop 4b: AGENT DEFINITIONS ---
+{title:'Agent Definitions: What Each Agent\u2019s Prompt Says',sub:`The actual system prompts for each ${R('built-in agent','tools/AgentTool/built-in/')}. Click any agent to see verbatim excerpts from its prompt.`,html:`<h3 style="color:var(--blue);margin-bottom:.6rem">Agent System Prompts (verbatim excerpts)</h3>
+<div style="display:flex;flex-direction:column;gap:4px">
+<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">Agent</div><div class="tool-name">Explore</div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">"You are a <strong>file search specialist</strong>. READ-ONLY. STRICTLY PROHIBITED from creating/modifying files."<br>\u2022 Uses Haiku for external (fast/cheap), inherits parent model for ant (cache sharing)<br>\u2022 "Make efficient use of tools: be smart about how you search. Spawn <strong>multiple parallel tool calls</strong>."<br>\u2022 Disallowed: Agent, ExitPlanMode, Edit, Write, NotebookEdit<br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} tools/AgentTool/built-in/exploreAgent.ts</span></div></div></div>
+<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">Agent</div><div class="tool-name">Plan</div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">"You are a <strong>software architect and planning specialist</strong>. READ-ONLY."<br>\u2022 Process: Understand Requirements \u2192 Explore Thoroughly \u2192 Design Solution \u2192 Detail the Plan<br>\u2022 Must end with: "Critical Files for Implementation" (3-5 files listed)<br>\u2022 Same restrictions as Explore<br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} tools/AgentTool/built-in/planAgent.ts</span></div></div></div>
+<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">Agent</div><div class="tool-name">general-purpose</div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">"<strong>Complete the task fully \u2014 don't gold-plate, but don't leave it half-done.</strong>"<br>\u2022 Full tool access: <code>['*']</code><br>\u2022 "When you complete the task, respond with a concise report \u2014 the caller will relay this to the user"<br>\u2022 Guidelines: search broadly, start broad and narrow, check multiple locations<br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} tools/AgentTool/built-in/generalPurposeAgent.ts</span></div></div></div>
+<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">Agent</div><div class="tool-name">Fork (self-clone)</div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">No custom system prompt \u2014 <strong>inherits parent's exact rendered bytes</strong>.<br>\u2022 <code>tools: ['*'], permissionMode: 'bubble', model: 'inherit'</code><br>\u2022 "re-calling getSystemPrompt() can diverge (GrowthBook cold\u2192warm) and bust the prompt cache; threading the rendered bytes is byte-exact"<br>\u2022 <code>FORK_SUBAGENT_TYPE = 'fork'</code><br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} tools/AgentTool/forkSubagent.ts</span></div></div></div>
+<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">Agent</div><div class="tool-name">claude-code-guide</div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">Help and documentation agent. Tools: Glob, Grep, Read, WebFetch, WebSearch.<br>\u2022 Used when users ask "Can Claude...", "Does Claude...", "How do I..."<br>\u2022 Covers: CLI features, hooks, MCP servers, Agent SDK, Claude API<br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} tools/AgentTool/built-in/claudeCodeGuideAgent.ts</span></div></div></div>
+<div class="tool-x" onclick="this.classList.toggle('open')"><div class="tx-head"><div><div class="tool-cat">Agent</div><div class="tool-name">Verification</div></div><span class="tx-arrow">\u25B6</span></div><div class="tx-body"><div class="tx-inner">"<strong>Independent adversarial verification</strong> must happen before reporting completion."<br>\u2022 Gated: VERIFICATION_AGENT + tengu_hive_evidence<br>\u2022 Non-trivial = 3+ file edits, backend/API changes, infrastructure<br>\u2022 Verdicts: PASS / FAIL / PARTIAL \u2014 model cannot self-assign<br><span style="color:var(--accent);font-size:.65rem">\u{1F4C2} tools/AgentTool/built-in/verificationAgent.ts</span></div></div></div>
+</div>`,takeaway:'Restricted tool access is the key agent pattern. Explore/Plan are read-only \u2014 they literally can\u2019t break things. Fork inherits parent\u2019s exact bytes for cache sharing. Verification cannot self-assign its own verdict.'},
+// --- Stop 5: MULTI-AGENT ---
+{title:'Multi-Agent: Forks, Swarms, Adversarial QA',sub:'6 built-in agent types. A self-forking pattern. And a verification agent that challenges the main agent\u2019s work.',html:`<table class="data-table"><tr><th>Agent</th><th>Model</th><th>Key Trait</th></tr><tr><td><strong>general-purpose</strong></td><td>default</td><td>Full tool access</td></tr><tr><td><strong>Explore</strong></td><td>Haiku (cheap)</td><td>Read-only, "PROHIBITED from modifying files"</td></tr><tr><td><strong>Plan</strong></td><td>Haiku</td><td>Architect, ends with "Critical Files"</td></tr><tr><td><strong>Verification</strong></td><td>\u2014</td><td>Adversarial QA (see below)</td></tr></table><div class="card" style="margin-top:.8rem"><h3>${R('Fork = self-clone','tools/AgentTool/forkSubagent.ts')}</h3><p>Child inherits full context + exact prompt bytes (not reconstructed). Shares parent's cache. Rules from ${R('AgentTool/prompt.ts','tools/AgentTool/prompt.ts')}: "Don't peek, don't race, don't change model."</p></div>`,takeaway:'Multi-agent is a cache sharing problem. Fork exists for cost. Same prompt bytes = shared cache. Design around what can be cached.'},
+// --- Stop 6: INTERNAL VS EXTERNAL PROMPTS ---
+{title:'Two Prompts: Internal vs External',sub:`Anthropic employees see different instructions than you do. These extra rules in ${R('constants/prompts.ts','constants/prompts.ts \u2014 getSimpleDoingTasksSection(), getOutputEfficiencySection()')} reveal what the team thinks the model needs but isn\u2019t ready to ship publicly.`,html:`<table class="data-table"><tr><th>Aspect</th><th>You see</th><th>Anthropic sees</th></tr><tr><td>Output</td><td>"Be extra concise"</td><td>"Write in flowing prose, inverted pyramid"</td></tr><tr><td>Comments</td><td>\u2014</td><td>"Default to no comments"</td></tr><tr><td>Pushing back</td><td>\u2014</td><td>"If you notice a misconception, say so"</td></tr><tr><td>Honesty</td><td>\u2014</td><td>"Never claim 'all tests pass' when failures"</td></tr><tr><td>Length</td><td>\u2014</td><td>"\u226425 words between tool calls"</td></tr><tr><td>Verification</td><td>\u2014</td><td>"Verify it actually works before reporting"</td></tr><tr><td>False claims</td><td>\u2014</td><td>"capy v8: 29-30% FC rate vs v4's 16.7%"</td></tr></table>`,takeaway:'The gap between internal and external prompts shows the frontier of prompt engineering \u2014 what works but isn\u2019t robust enough for everyone yet.'},
+// --- Stop 7: CONTEXT WINDOW ---
+{title:'Context Window: 4 Compaction Strategies',sub:'Conversations fill up. Claude Code has 4 strategies \u2014 from surgical removal to full summarization \u2014 used cheapest-first.',html:`<div style="display:flex;flex-direction:column;gap:3px"><div class="tier" style="background:rgba(110,231,183,.06)"><div><strong style="color:var(--accent)">1. ${R('Micro-compaction','services/compact/microCompact.ts')}</strong><br><small>Clears old tool outputs. Every turn. "[Old tool result content cleared]"</small></div><div style="color:var(--text2);font-size:.75rem">Cheap</div></div><div class="tier" style="background:rgba(96,165,250,.06)"><div><strong style="color:var(--blue)">2. ${R('Auto-compaction','services/compact/autoCompact.ts')}</strong><br><small>Full summary. Reserves ${R('20K tokens','services/compact/autoCompact.ts \u2014 MAX_OUTPUT_TOKENS_FOR_SUMMARY = 20_000')} (p99.99 = 17,387). 9 required sections.</small></div><div style="color:var(--text2);font-size:.75rem">Medium</div></div><div class="tier" style="background:rgba(167,139,250,.06)"><div><strong style="color:var(--purple)">3. Context Collapse</strong><br><small>Read-time projection. Prevents auto-compact if succeeds.</small></div><div style="color:var(--text2);font-size:.75rem">Feature-gated</div></div><div class="tier" style="background:rgba(248,113,113,.06)"><div><strong style="color:var(--red)">4. Reactive Compact</strong><br><small>Emergency. Error hidden from user while recovery attempted.</small></div><div style="color:var(--text2);font-size:.75rem">Nuclear</div></div></div><div class="card" style="margin-top:.8rem;border-color:var(--orange)"><h3 style="color:var(--orange)">Model-specific fix</h3><p>Compaction starts with "CRITICAL: TEXT ONLY. Tool calls REJECTED." Why? Sonnet 4.6 tries to call tools during summarization (2.79% failure vs 0.01% on 4.5).</p></div>`,takeaway:'Context management determines quality more than routing. Budget your summary tokens, preserve user messages verbatim, and include task-drift prevention.'},
+// --- Stop 8: CACHE OPTIMIZATION ---
+{title:'Cache Optimization: Where Money Is Saved',sub:'Cache reads cost 10x less than input tokens. A single structural change saved 10.2% of fleet costs.',html:`<div class="grid-3"><div class="stat-card"><div class="sn" style="color:var(--orange)">10.2%</div><div class="sl">Fleet cache costs saved by moving agent list</div></div><div class="stat-card"><div class="sn" style="color:var(--accent)">77%</div><div class="sl">Cache breaks are schema text changes</div></div><div class="stat-card"><div class="sn" style="color:var(--blue)">100-200ms</div><div class="sl">Saved by API preconnect</div></div></div><div class="card" style="margin-top:.8rem"><h3>${R('Per-tool hash tracking','services/api/promptCacheBreakDetection.ts')}</h3><p>Hashes system prompt, per-tool schemas, model, betas, effort. Diffs on break to identify exactly which tool description changed. "77% of tool breaks per BQ 2026-03-22." Agent list fix in ${R('AgentTool/prompt.ts','tools/AgentTool/prompt.ts \u2014 shouldInjectAgentListInMessages()')}.</p></div>`,takeaway:'Instrument your cache hit rate. The 10.2% saving came from understanding that agent list changes bust the entire tool schema cache.'},
+// --- Stop 9: MEMORY ---
+{title:'Memory: Four Tiers Including Dreams',sub:'From ephemeral session notes to background "dream" consolidation during idle time.',html:`<div style="display:flex;flex-direction:column;gap:3px"><div class="tier" style="background:rgba(110,231,183,.06)"><div><strong style="color:var(--accent)">${R('Session Memory','services/SessionMemory/sessionMemoryUtils.ts')}</strong><br><small>Activates at 10K tokens, updates every 5K tokens.</small></div><div style="color:var(--text2);font-size:.75rem">In-session</div></div><div class="tier" style="background:rgba(96,165,250,.06)"><div><strong style="color:var(--blue)">${R('Persistent Memory','memdir/memdir.ts')}</strong><br><small>MEMORY.md index (max 200 lines). Types: user, feedback, project, reference.</small></div><div style="color:var(--text2);font-size:.75rem">Cross-session</div></div><div class="tier" style="background:rgba(167,139,250,.06)"><div><strong style="color:var(--purple)">${R('Background Extraction','services/extractMemories/extractMemories.ts')}</strong><br><small>"Perfect fork" \u2014 silently extracts memories you didn't ask for.</small></div><div style="color:var(--text2);font-size:.75rem">Silent</div></div><div class="tier" style="background:rgba(244,114,182,.06)"><div><strong style="color:var(--pink)">${R('Dream Consolidation','services/autoDream/consolidationPrompt.ts')}</strong><br><small>"You are performing a dream \u2014 a reflective pass over your memory files."</small></div><div style="color:var(--text2);font-size:.75rem">Idle time</div></div></div>`,takeaway:'Memory needs active curation. Build eviction and consolidation from day one. The dream prompt says: "Look only for things you already suspect matter."'},
+// --- Stop 10: VERIFICATION AGENT ---
+{title:'Verification: Adversarial QA Before Completion',sub:'For non-trivial work (3+ file edits), an independent verifier must pass before Claude reports "done."',html:`<div class="card" style="border-color:var(--red)"><h3 style="color:var(--red)">From ${R('constants/prompts.ts','constants/prompts.ts \u2014 getSessionSpecificGuidanceSection()')}:</h3><p>"Independent adversarial verification must happen before you report completion. <strong>Your own checks and a fork's self-checks do NOT substitute.</strong>"</p><p style="margin-top:.5rem">\u2022 Verdicts: PASS, FAIL, PARTIAL<br>\u2022 Model <strong>cannot self-assign PARTIAL</strong><br>\u2022 On FAIL: fix issues and re-verify until PASS<br>\u2022 Gated behind <code>tengu_hive_evidence</code></p></div>`,takeaway:'Build verification into your agent\u2019s workflow. Self-checking isn\u2019t enough \u2014 adversarial verification catches what the implementer misses.'},
+// --- Stop 11: MODEL EVOLUTION ---
+{title:'Model Evolution: Fennec to Capybara',sub:'Migration files and model configs reveal the full lineup, codenames, and a pricing surprise.',html:`<div style="position:relative;padding-left:1.5rem;margin:1rem 0"><div style="position:absolute;left:6px;top:0;bottom:0;width:2px;background:var(--bg4)"></div><div style="position:relative;padding-bottom:1.2rem"><div style="position:absolute;left:-1.3rem;top:3px;width:9px;height:9px;border-radius:50%;background:var(--text2)"></div><div style="font-size:.7rem;color:var(--text2)">May 2025</div><div style="color:#fff;font-size:.85rem"><strong>Opus 4.0</strong> \u00b7 <span style="color:var(--red)">$15/$75</span></div></div><div style="position:relative;padding-bottom:1.2rem"><div style="position:absolute;left:-1.3rem;top:3px;width:9px;height:9px;border-radius:50%;background:var(--accent)"></div><div style="font-size:.7rem;color:var(--text2)">Nov 2025</div><div style="color:#fff;font-size:.85rem"><strong>Opus 4.5</strong> \u00b7 <span style="color:var(--accent)">$5/$25 \u2014 3x cheaper!</span></div></div><div style="position:relative;padding-bottom:1.2rem"><div style="position:absolute;left:-1.3rem;top:3px;width:9px;height:9px;border-radius:50%;background:var(--pink);box-shadow:0 0 6px var(--pink)"></div><div style="font-size:.7rem;color:var(--pink)">Rolling</div><div style="color:#fff;font-size:.85rem"><strong>Opus 4.6 & Sonnet 4.6</strong> (current)</div></div><div style="position:relative"><div style="position:absolute;left:-1.3rem;top:3px;width:9px;height:9px;border-radius:50%;border:2px dashed var(--orange);background:var(--bg)"></div><div style="font-size:.7rem;color:var(--orange)">Next</div><div style="color:var(--orange);font-size:.85rem"><strong>Capybara v8</strong> (FC rate: 29-30% vs 16.7%)</div></div></div><div class="grid-3" style="margin-top:1rem"><div class="stat-card"><div class="sn" style="color:var(--accent);font-size:1.2rem">Tengu</div><div class="sl">Claude Code</div></div><div class="stat-card"><div class="sn" style="color:var(--orange);font-size:1.2rem">Capybara</div><div class="sl">Next model</div></div><div class="stat-card"><div class="sn" style="color:var(--blue);font-size:1.2rem">Fennec</div><div class="sl">Early Opus</div></div></div>`,takeaway:'Model pricing went DOWN (Opus 4.5 is 3x cheaper than 4.0). Cache reads are 10x cheaper than input. Design around these economics.'},
+]},
+// ===== TOUR 1: SECRETS =====
+{name:'The Secrets',icon:'\u{1F50D}',stops:[
+{title:'Anti-Distillation: Poisoning the Well',sub:'Active defense against competitors training on Claude\u2019s outputs. Injects fake/decoy tools into API responses.',html:`<div class="card" style="border-color:var(--red)"><h3 style="color:var(--red)">From ${R('services/api/claude.ts:301-313','services/api/claude.ts \u2014 getExtraBodyParams()')}</h3><div style="background:var(--bg);padding:.7rem;border-radius:6px;font-size:.78rem;margin:.5rem 0"><code>result.anti_distillation = ['fake_tools']</code></div><p>\u2022 Injects <strong>fake/decoy tools</strong> into API responses<br>\u2022 Anyone scraping outputs to train a competitor trains on poisoned data<br>\u2022 Only for 1st-party CLI, gated by <code>tengu_anti_distill_fake_tool_injection</code><br>\u2022 Also: "connector-text summarization (anti-distillation)" in beta headers</p></div><p style="margin-top:.8rem;font-size:.8rem;color:var(--text2)"><em>Not discussed in the HN thread at all.</em></p>`,takeaway:'If you ship an AI product, consider what happens when competitors scrape your API outputs for training data.'},
+{title:'Undercover Mode: No Force-OFF',sub:'When Anthropic engineers contribute to public repos, all traces of AI involvement are stripped. There is no way to disable this.',html:`<div class="card" style="border-color:var(--orange)"><h3 style="color:var(--orange)">From ${R('utils/undercover.ts','utils/undercover.ts \u2014 isUndercover(), getUndercoverInstructions()')}</h3><p>\u2022 <strong>Active by default</strong> unless repo remote matches internal allowlist<br>\u2022 <strong>"There is NO force-OFF."</strong><br>\u2022 Strips: model codenames, versions, internal repo names, Slack channels, attribution<br>\u2022 Instructions: "Write commit messages as a human developer would"<br>\u2022 "NEVER include...mention that you are an AI"</p></div><div class="card" style="margin-top:.6rem;border-color:var(--text2)"><h3 style="color:var(--text2)">HN Debate</h3><p>BoppreH flagged this as deceptive. lazysheepherd defended it as commit-style guidance, not identity deception. The code is open \u2014 readers can judge.</p></div>`,takeaway:'Undercover mode protects against leaking internal codenames. The ethical line between "write clearly" and "hide your identity" is worth examining.'},
+{title:'The Internal Prompt Rules You Don\u2019t See',sub:'Anthropic employees get extra instructions including false-claim rate data for the next model.',html:`<div class="card"><h3>Key additions for internal users:</h3><p>\u2022 <strong>"Default to writing no comments."</strong> Only when the WHY is non-obvious<br>\u2022 <strong>"If you notice a misconception, say so."</strong> You\u2019re a collaborator, not just an executor<br>\u2022 <strong>"Never claim 'all tests pass' when output shows failures."</strong><br>\u2022 <strong>"\u226425 words between tool calls."</strong> Numeric anchors reduce output ~1.2%<br>\u2022 <strong>"Before reporting complete, verify it actually works."</strong><br>\u2022 <code>@[MODEL LAUNCH]</code> markers reference <strong>Capybara v8</strong> with "false-claims rate 29-30% vs v4's 16.7%"</p></div><p style="margin-top:.8rem;font-size:.8rem;color:var(--text2)"><code>CLAUDE_CODE_SIMPLE=1</code> reduces the entire prompt to one line. Useful for debugging.</p>`,takeaway:'The gap between internal and external prompts is where the next generation of prompt patterns lives. Watch what moves from "ant-only" to general availability.'},
+{title:'Internal Codenames & Private Repos',sub:'The code reveals Anthropic\u2019s naming conventions and 20+ private repository names.',html:`<div class="grid-3"><div class="stat-card"><div class="sn" style="color:var(--accent);font-size:1.2rem">Tengu</div><div class="sl">Claude Code</div></div><div class="stat-card"><div class="sn" style="color:var(--orange);font-size:1.2rem">Capybara</div><div class="sl">Next model (v8)</div></div><div class="stat-card"><div class="sn" style="color:var(--blue);font-size:1.2rem">Fennec</div><div class="sl">Early Opus</div></div><div class="stat-card"><div class="sn" style="color:var(--pink);font-size:1.2rem">Kairos</div><div class="sl">Always-on assistant</div></div><div class="stat-card"><div class="sn" style="color:var(--purple);font-size:1.2rem">Numbat</div><div class="sl">Upcoming launch</div></div></div><div class="card" style="margin-top:.8rem"><h3>Private repos (from ${R('commitAttribution.ts','utils/commitAttribution.ts \u2014 INTERNAL_MODEL_REPOS[]')})</h3><p style="font-size:.72rem">claude-cli-internal, anthropic, apps, casino, dbt, dotfiles, terraform-config, hex-export, feedback-v2, labs, argo-rollouts, starling-configs, ts-tools, ts-capsules, feldspar-testing, trellis, claude-for-hiring, forge-web, infra-manifests, mycro_manifests, mycro_configs, mobile-apps</p></div>`,takeaway:'The undercover mode allowlist is a window into Anthropic\u2019s infrastructure: from ML infrastructure (starling, trellis) to hiring tools to mobile apps.'},
+{title:'The Buddy Game: Tamagotchi in a Terminal',sub:'18 ASCII species, rarity tiers, RPG stats, model-generated "souls". Behind the <code>BUDDY</code> flag. Click one.',html:`<div class="buddy-grid">${buddyHTML()}</div><div class="card" style="margin-top:.8rem"><h3>From ${R('buddy/','buddy/types.ts, buddy/companion.ts, buddy/sprites.ts')}:</h3><p>\u2022 Rarity: common 60%, uncommon 25%, rare 10%, epic 4%, <strong>legendary 1%</strong><br>\u2022 Stats: DEBUGGING, PATIENCE, CHAOS, WISDOM, SNARK<br>\u2022 Hats: crown, tophat, propeller, halo, wizard, beanie, tinyduck<br>\u2022 <code>CompanionSoul: { name, personality }</code> \u2014 model-generated<br>\u2022 Seeded PRNG (Mulberry32) from userId hash \u2014 <strong>can't cheat to legendary</strong><br>\u2022 Species hex-encoded: "collides with a model-codename canary in excluded-strings.txt"</p></div>`,takeaway:'HN user avaer suggested this was an "April Fools joke" with gacha mechanics planned for viral Twitter. The code is fully implemented, not a stub.'},
+{title:'Claude Literally Dreams',sub:'During idle time, a background agent consolidates memories using a prompt that starts with "You are performing a dream."',html:`<div class="card" style="border-color:var(--pink)"><h3 style="color:var(--pink)">From ${R('consolidationPrompt.ts','services/autoDream/consolidationPrompt.ts \u2014 buildConsolidationPrompt()')}</h3><p><em>"You are performing a dream \u2014 a reflective pass over your memory files. Synthesize what you've learned recently into durable, well-organized memories."</em></p><p style="margin-top:.5rem">\u2022 Gate: time since last consolidation \u2192 session count \u2192 no lock conflict<br>\u2022 Phases: Orient \u2192 Gather \u2192 Consolidate \u2192 Prune<br>\u2022 <em>"Don't exhaustively read transcripts. Look only for things you already suspect matter."</em><br>\u2022 10-minute scan throttle between checks</p></div>`,takeaway:'Background memory consolidation is a novel pattern for long-running agents. The "dream" metaphor shapes the agent\u2019s approach: reflective, selective, pruning.'},
+{title:'Speculative Execution: 20 Turns Ahead',sub:'Claude runs ahead of your approval. Writes go to a temp overlay, applied only if you accept.',html:`<div class="grid-2"><div class="card" style="border-color:var(--cyan)"><h3 style="color:var(--cyan)">From ${R('speculation.ts','services/PromptSuggestion/speculation.ts \u2014 MAX_SPECULATION_TURNS, WRITE_TOOLS, SAFE_READ_ONLY_TOOLS')}</h3><p>\u2022 Up to <strong>20 turns / 100 messages</strong> ahead<br>\u2022 File overlay: writes to temp dir<br>\u2022 Applied only on user acceptance<br>\u2022 Safe tools auto-approved: Read, Glob, Grep, ToolSearch, LSP</p></div><div class="card"><h3>Why this matters</h3><p>Multi-step tasks complete while you\u2019re still reviewing step 1. The overlay system ensures nothing is permanently changed until you approve.</p></div></div><p style="margin-top:.8rem;font-size:.8rem;color:var(--text2)"><em>Not discussed in the HN thread.</em></p>`,takeaway:'If your agent needs human approval for risky actions, consider speculatively executing safe read-only actions in the background.'},
+{title:'Sentiment Detection & Spinner Verbs',sub:'A regex checks if you\u2019re frustrated. And 120+ loading verbs rotate while Claude works.',html:`<div class="card"><h3>Sentiment via regex, not LLM</h3><p><em>Found by HN user bkryza.</em> ${R('userPromptKeywords.ts','utils/userPromptKeywords.ts \u2014 matchesNegativeKeyword()')} uses regex to detect: "wtf", "shitty", "fucking broken", "piece of crap", "so frustrating", "this sucks". Used for <strong>analytics only</strong> \u2014 doesn\u2019t change behavior. HN user lopsotronic: "~10,000x faster than inference."</p></div><div style="margin-top:1rem"><h3 style="color:var(--orange);margin-bottom:.5rem">120+ Spinner Verbs (customizable)</h3><div style="display:flex;flex-wrap:wrap;gap:4px">${V.map(v=>`<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:.63rem;background:var(--bg3);color:var(--text2)">${v}</span>`).join('')}</div></div>`,takeaway:'Not everything needs the LLM. Regex for sentiment logging is pragmatic engineering. The spinner verbs are pure personality \u2014 configurable via settings.'},
+]},
+// ===== TOUR 2: PLAYBOOK =====
+{name:'The Playbook',icon:'\u{1F527}',stops:[
+{title:'Principles 1-4: Loop, Tools, Context, Cache',sub:'The first four principles distilled from the architecture. Each backed by specific code evidence.',html:`<div class="grid-2">${[{n:1,t:'Loop dumb, prompt smart',d:'The loop is while(true). Intelligence lives in tool prompts and system prompt, not orchestration.'},{n:2,t:'Tool prompts = behavior',d:'Write descriptions like training a new hire. Encode anti-patterns, cross-references, and failure modes.'},{n:3,t:'Context > orchestration',d:'4 compaction strategies with model-specific workarounds. Context management > routing logic.'},{n:4,t:'Cache drives architecture',d:'10.2% fleet savings from one structural change. Static first, dynamic last, boundary between.'}].map(p=>`<div class="principle-card"><div class="pn">${p.n}</div><h3>${p.n}. ${p.t}</h3><p>${p.d}</p></div>`).join('')}</div>`,takeaway:'These four principles address the most common mistakes in agent building: over-engineering the loop, under-investing in prompts, ignoring context limits, and treating caching as an afterthought.'},
+{title:'Principles 5-7: Safety, Multi-Agent, Memory',sub:'Defense in depth, cache-aware multi-agent design, and active memory curation.',html:`<div class="grid-2" style="grid-template-columns:1fr">${[{n:5,t:'Defense in depth',d:'10-step permission cascade. Bypass-immune safety checks. Tree-sitter AST. Classifier denial tracking (max 3 consecutive, 20 total).'},{n:6,t:'Multi-agent = cache sharing',d:'Fork exists for cost. Same prompt bytes = shared cache. "Don\'t peek, don\'t race, don\'t change model."'},{n:7,t:'Curate memory, don\'t hoard',d:'4 tiers with eviction. Dream consolidation prunes stale facts. "Look only for things you suspect matter."'}].map(p=>`<div class="principle-card"><div class="pn">${p.n}</div><h3>${p.n}. ${p.t}</h3><p>${p.d}</p></div>`).join('')}</div>`,takeaway:'Safety costs more code than the core loop. Multi-agent is an economics problem. Memory without pruning becomes noise.'},
+{title:'Principles 8-10: Recovery, Speculation, Measurement',sub:'Layer your recovery, speculate safely, and measure what breaks your cache.',html:`<div class="grid-2" style="grid-template-columns:1fr">${[{n:8,t:'Layer your recovery',d:'Cheap first, expensive last. Hide errors while recovering. Guards prevent infinite loops. Max 3 attempts.'},{n:9,t:'Speculate safely',d:'Run 20 turns ahead. Overlay writes to temp dir. Auto-approve reads, track writes. Apply only on accept.'},{n:10,t:'Measure cache breaks',d:'Per-tool schema hashing. 77% of breaks are text changes, not tool adds/removes. Instrument and investigate.'}].map(p=>`<div class="principle-card"><div class="pn">${p.n}</div><h3>${p.n}. ${p.t}</h3><p>${p.d}</p></div>`).join('')}</div>`,takeaway:'The meta-principle: build observability into your agent from day one. You can\u2019t optimize what you don\u2019t measure.'},
+{title:'Power User: Hidden Triggers',sub:'Features and shortcuts extracted from the source code. Things the docs don\u2019t tell you.',html:`<div>${[{k:'ultrathink',d:'Type in any message \u2192 enhanced thinking mode'},{k:'CLAUDE_CODE_SIMPLE=1',d:'Strips entire system prompt to one line'},{k:'/rewind',d:'Go back in conversation via message selector'},{k:'/doctor',d:'Diagnostic troubleshooting screen'},{k:'/compact',d:'Manually trigger conversation compaction'},{k:'/cost',d:'Current session cost breakdown'},{k:'/thinkback',d:'"Your 2025 Year in Review" (if gate enabled)'},{k:'/stickers',d:'Opens Claude Code sticker merch page'}].map(r=>`<div class="cheat-row"><span class="cheat-key">${r.k}</span><span class="cheat-desc">${r.d}</span></div>`).join('')}</div>`,takeaway:'These hidden triggers exist because power users want escape hatches. ultrathink and /compact are the most useful for daily work.'},
+{title:'Power User: Optimization',sub:'How to configure Claude Code for maximum efficiency, based on what the code actually supports.',html:`<div>${[{k:'CLAUDE.md hierarchy',d:'Global + project + directory-level. Encode conventions, test commands, always/never rules.'},{k:'acceptEdits mode',d:'Auto-approves file edits within CWD. Good for trusted projects.'},{k:'Permission patterns',d:'Bash(git diff:*) allows all git diff without prompting. Per-project.'},{k:'Effort levels',d:'low/medium/high/max. "max" is Opus 4.6 exclusive. Lower = faster + cheaper.'},{k:'Spinner verbs',d:'Customizable in settings: append or replace 120+ defaults.'}].map(r=>`<div class="cheat-row"><span class="cheat-key">${r.k}</span><span class="cheat-desc">${r.d}</span></div>`).join('')}<h3 style="color:var(--red);margin:1.2rem 0 .6rem">What to Avoid</h3>${[{k:'Broad Bash(*) rules',d:'Auto-stripped when entering auto mode anyway.'},{k:'Manual context mgmt',d:'4-tier compaction handles this. /compact only if quality drops.'},{k:'Re-reading files',d:'Returns FILE_UNCHANGED_STUB automatically.'}].map(r=>`<div class="cheat-row"><span class="cheat-key" style="color:var(--red)">${r.k}</span><span class="cheat-desc">${r.d}</span></div>`).join('')}</div>`,takeaway:'The permission system and CLAUDE.md hierarchy are your main customization levers. Use them per-project for maximum efficiency.'},
+{title:'Power User: Feature Flags Roadmap',sub:'90+ flags reveal what\u2019s shipped, emerging, and coming next.',html:`<div style="margin-bottom:.6rem;font-size:.7rem;display:flex;gap:.6rem;flex-wrap:wrap"><span><span class="flag-pill shipped">\u25CF</span> Shipped</span><span><span class="flag-pill emerging">\u25CF</span> Emerging</span><span><span class="flag-pill future">\u25CF</span> Future</span><span><span class="flag-pill safety">\u25CF</span> Safety</span><span><span class="flag-pill unknown">\u25CF</span> Unknown</span></div><div style="line-height:2">${[{n:'BUDDY',c:'shipped'},{n:'ULTRATHINK',c:'shipped'},{n:'BRIDGE_MODE',c:'shipped'},{n:'EXTRACT_MEMORIES',c:'shipped'},{n:'FORK_SUBAGENT',c:'emerging'},{n:'ULTRAPLAN',c:'emerging'},{n:'VERIFICATION_AGENT',c:'emerging'},{n:'CONTEXT_COLLAPSE',c:'emerging'},{n:'TOKEN_BUDGET',c:'emerging'},{n:'KAIROS',c:'future'},{n:'KAIROS_CHANNELS',c:'future'},{n:'DAEMON',c:'future'},{n:'WEB_BROWSER_TOOL',c:'future'},{n:'VOICE_MODE',c:'future'},{n:'WORKFLOW_SCRIPTS',c:'future'},{n:'ANTI_DISTILLATION_CC',c:'safety'},{n:'BASH_CLASSIFIER',c:'safety'},{n:'TRANSCRIPT_CLASSIFIER',c:'safety'},{n:'TREE_SITTER_BASH',c:'safety'},{n:'LODESTONE',c:'unknown'},{n:'TORCH',c:'unknown'}].map(f=>`<span class="flag-pill ${f.c}">${f.n}</span>`).join('')}</div>`,takeaway:'KAIROS (persistent assistant), DAEMON (background mode), and WEB_BROWSER_TOOL are the biggest signals about where Claude Code is heading.'},
+{title:'What This Analysis Found That HN Didn\u2019t',sub:'Side-by-side comparison of HN thread coverage vs this deep dive.',html:`<div style="border:1px solid var(--bg3);border-radius:8px;overflow:hidden"><div class="cmp-row" style="background:var(--bg3);font-weight:600"><div class="topic" style="color:var(--accent)">Topic</div><div class="cmp-yes">HN</div><div class="cmp-yes">Here</div></div>${[{t:'Anti-distillation (fake_tools)',h:false},{t:'Speculative execution (20 turns)',h:false},{t:'Dream consolidation',h:false},{t:'Cache metrics (10.2%, 77%)',h:false},{t:'Compaction (2.79% failure fix)',h:false},{t:'Ant vs external prompts',h:false},{t:'10-step permission cascade',h:false},{t:'4-tier memory system',h:false},{t:'Fork cache sharing',h:false},{t:'Verification agent',h:false},{t:'10 builder principles',h:false},{t:'Power user guide',h:false},{t:'Kairos + Buddy + Undercover',h:true},{t:'Sentiment regex',h:true},{t:'TUI rendering tradeoff',h:true}].map(r=>`<div class="cmp-row"><div class="topic">${r.t}</div><div class="${r.h?'cmp-yes':'cmp-no'}">${r.h?'\u2713':'\u2014'}</div><div class="cmp-yes">\u2713</div></div>`).join('')}</div>`,takeaway:'The HN thread covered surface-level discoveries. The real engineering insights \u2014 cache economics, compaction strategies, permission architecture \u2014 weren\u2019t discussed.'},
+]},
+];
+
+// ===== TOUR ENGINE =====
+let curTour=0,curStop=0,visited=new Set();
+function startTour(i){curTour=i;curStop=0;visited=new Set();document.getElementById('hero').style.display='none';const tv=document.getElementById('tour-view');tv.style.display='block';document.getElementById('tour-title').textContent=tours[i].icon+' '+tours[i].name;renderDots();renderStop();window.scrollTo(0,0)}
+function exitTour(){document.getElementById('hero').style.display='';document.getElementById('tour-view').style.display='none';window.scrollTo(0,0)}
+function goStop(i){if(i<0||i>=tours[curTour].stops.length)return;curStop=i;visited.add(i);renderDots();renderStop();window.scrollTo(0,0)}
+function renderDots(){const d=document.getElementById('tour-dots');d.innerHTML='';const stops=tours[curTour].stops;stops.forEach((_,i)=>{const b=document.createElement('button');b.className='dot'+(i===curStop?' active':visited.has(i)?' visited':'');b.onclick=()=>goStop(i);d.appendChild(b)});document.getElementById('tour-progress').style.width=((curStop+1)/stops.length*100)+'%'}
+document.addEventListener('keydown',e=>{if(document.getElementById('tour-view').style.display==='none')return;if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();goStop(curStop+1)}else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();goStop(curStop-1)}else if(e.key==='Escape'){exitTour()}});
+function renderStop(){const s=tours[curTour].stops[curStop];const c=document.getElementById('stop-container');const total=tours[curTour].stops.length;c.innerHTML=`<div class="stop"><div class="stop-num">${tours[curTour].name} \u2014 Stop ${curStop+1} of ${total}</div><h2>${s.title}</h2><p class="stop-sub">${s.sub}</p>${s.html}${s.takeaway?`<div class="takeaway"><div class="ta-label">\u{1F4A1} Takeaway</div><p>${s.takeaway}</p></div>`:''}<div class="stop-nav"><button class="nav-btn prev" onclick="goStop(${curStop-1})" ${curStop===0?'disabled':''}>\u2190 Previous</button><div class="stop-counter">${curStop+1} / ${total}<br><span style="font-size:.6rem;color:var(--text2)">\u2190 \u2192 arrow keys &middot; esc to exit</span></div>${curStop===total-1?`<button class="nav-btn next" onclick="exitTour()">End of tour \u2192</button>`:`<button class="nav-btn next" onclick="goStop(${curStop+1})">Next \u2192</button>`}</div></div>`;visited.add(curStop)}
+</script>
+</body>
+</html>
