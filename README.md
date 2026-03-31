@@ -2,11 +2,13 @@
 
 Claude Code's full TypeScript source was accidentally exposed via source maps in an NPM package.
 
-<blockquote class="twitter-tweet"><p lang="en" dir="ltr">Claude code source code has been leaked via a map file in their npm registry!</p>&mdash; Chaofan Shou (@Fried_rice) <a href="https://twitter.com/Fried_rice/status/2038894956459290963">March 31, 2026</a></blockquote>
+<a href="https://x.com/Fried_rice/status/2038894956459290963">
+<img src="tweet.png" alt="Original leak tweet by @Fried_rice — 21.2M views" width="500">
+</a>
 
-> 21.2M views. [HN discussion](https://news.ycombinator.com/item?id=47584540) covered surface-level findings. This analysis goes deeper.
+> [Original tweet](https://x.com/Fried_rice/status/2038894956459290963) (21.2M views) | [HN discussion](https://news.ycombinator.com/item?id=47584540) covered surface-level findings. This analysis goes deeper.
 
-## What we found
+## Highlights
 
 **Anti-distillation is live** — `anti_distillation: ['fake_tools']` injects decoy tools into API responses to poison anyone scraping Claude's outputs for training data. *Not discussed on HN.*
 
