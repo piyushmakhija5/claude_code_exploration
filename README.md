@@ -35,7 +35,9 @@ Claude Code's full TypeScript source was accidentally exposed via source maps in
 
 ## Interactive tour
 
-Open `index.html` locally. Three tracks:
+**Live at [claude-code-exploration.vercel.app](https://claude-code-exploration.vercel.app/)**
+
+Three guided tracks:
 
 - **The Architecture** (12 stops) — System prompt, tools, skills, agents, context, cache, memory, models
 - **The Secrets** (8 stops) — Anti-distillation, undercover mode, codenames, buddy game, dreams, speculative execution
