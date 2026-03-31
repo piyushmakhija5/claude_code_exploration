@@ -42,7 +42,7 @@ That's it. The model decides what to search, what to read, what to edit, and whe
 
 ## The System Prompt: ~46K Tokens, Every One Counted
 
-The system prompt is assembled from ~20 modular sections in `constants/prompts.ts` (~700 lines). But before we get to the two-world split, here's what matters most: **where the tokens actually go.**
+The system prompt is assembled from ~20 modular sections in `constants/prompts.ts` (~700 lines). But before getting to the two-world split, here's what matters most: **where the tokens actually go.**
 
 ### Token distribution (estimated from source file sizes, ~4 chars/token)
 

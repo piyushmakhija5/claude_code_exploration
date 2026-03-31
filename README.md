@@ -1,5 +1,7 @@
 # Inside Tengu: Claude Code Source Analysis
 
+By [Piyush Makhija](https://x.com/piyushmakhija_)
+
 Claude Code's full TypeScript source was accidentally exposed via source maps in an NPM package.
 
 <a href="https://x.com/Fried_rice/status/2038894956459290963">
@@ -43,4 +45,4 @@ Arrow keys to navigate. Click cards to expand. Hover dotted text for source refs
 
 ## Source
 
-Analysis via direct code inspection. All findings cite specific files. Cross-referenced with [HN #47584540](https://news.ycombinator.com/item?id=47584540). Codebase: `@anthropic-ai/claude-code` NPM package.
+Analysis by [Piyush Makhija](https://x.com/piyushmakhija_) via direct code inspection. All findings cite specific files. Cross-referenced with [HN #47584540](https://news.ycombinator.com/item?id=47584540). Codebase: `@anthropic-ai/claude-code` NPM package.
